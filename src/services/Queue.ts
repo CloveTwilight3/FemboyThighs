@@ -41,11 +41,13 @@ export class MusicQueue {
     // Create audio player
     this.audioPlayer = createAudioPlayer();
 
-    // Join voice channel
+    // Join voice channel with selfDeaf to fix encryption mode issues
     this.voiceConnection = joinVoiceChannel({
       channelId: voiceChannel.id,
       guildId: guild.id,
       adapterCreator: guild.voiceAdapterCreator as any,
+      selfDeaf: true,
+      selfMute: false
     });
 
     // Subscribe the connection to the audio player
@@ -102,10 +104,17 @@ export class MusicQueue {
       console.log(`🎵 Attempting to play: ${track.title}`);
       console.log(`🔗 URL: ${track.url}`);
 
-      // Get audio stream using play-dl
-      const stream = await play.stream(track.url, {
-        quality: 2 // High quality
-      });
+      // Validate the URL before attempting to stream
+      const validation = play.yt_validate(track.url);
+      if (validation !== 'video') {
+        throw new Error(`Invalid YouTube URL: ${track.url}`);
+      }
+
+      // Get video info first to ensure we have the correct format
+      const videoInfo = await play.video_info(track.url);
+      
+      // Get audio stream using play-dl with the validated URL
+      const stream = await play.stream(track.url);
 
       const resource = createAudioResource(stream.stream, {
         inputType: stream.type,
