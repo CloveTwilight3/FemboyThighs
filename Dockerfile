@@ -1,11 +1,16 @@
 FROM node:25-alpine
 
-# Install dependencies for audio processing
+# Install dependencies for audio processing including ffmpeg, yt-dlp and codecs
 RUN apk add --no-cache \
     python3 \
+    py3-pip \
     make \
     g++ \
-    git
+    git \
+    ffmpeg \
+    opus \
+    opus-dev \
+    yt-dlp
 
 # Set working directory
 WORKDIR /app

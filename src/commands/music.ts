@@ -1,5 +1,5 @@
 /**
- * Music Commands - All music-related slash commands
+ * Music Commands - All music-related slash commands using DisTube
  */
 
 import {
@@ -11,16 +11,16 @@ import {
   MessageFlags
 } from 'discord.js';
 
-import { MusicManager } from '../services/MusicManager';
+import { DisTube } from 'distube';
 
 /**
  * Register all music commands
  */
-export function registerMusicCommands(commandsArray: any[], musicManager: MusicManager): void {
+export function registerMusicCommands(commandsArray: any[]): void {
   // Play command
   const playCommand = new SlashCommandBuilder()
     .setName('play')
-    .setDescription('Play a song from YouTube')
+    .setDescription('Play a song from YouTube or search query')
     .addStringOption(option =>
       option
         .setName('query')
@@ -124,7 +124,7 @@ export function registerMusicCommands(commandsArray: any[], musicManager: MusicM
  */
 export async function handleMusicCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
   if (!interaction.guild) {
     await interaction.reply({
@@ -140,47 +140,47 @@ export async function handleMusicCommand(
   try {
     switch (commandName) {
       case 'play':
-        await handlePlayCommand(interaction, musicManager, member);
+        await handlePlayCommand(interaction, distube, member);
         break;
       
       case 'skip':
-        await handleSkipCommand(interaction, musicManager);
+        await handleSkipCommand(interaction, distube);
         break;
       
       case 'stop':
-        await handleStopCommand(interaction, musicManager);
+        await handleStopCommand(interaction, distube);
         break;
       
       case 'pause':
-        await handlePauseCommand(interaction, musicManager);
+        await handlePauseCommand(interaction, distube);
         break;
       
       case 'resume':
-        await handleResumeCommand(interaction, musicManager);
+        await handleResumeCommand(interaction, distube);
         break;
       
       case 'queue':
-        await handleQueueCommand(interaction, musicManager);
+        await handleQueueCommand(interaction, distube);
         break;
       
       case 'volume':
-        await handleVolumeCommand(interaction, musicManager);
+        await handleVolumeCommand(interaction, distube);
         break;
       
       case 'shuffle':
-        await handleShuffleCommand(interaction, musicManager);
+        await handleShuffleCommand(interaction, distube);
         break;
       
       case 'leave':
-        await handleLeaveCommand(interaction, musicManager);
+        await handleLeaveCommand(interaction, distube);
         break;
       
       case 'nowplaying':
-        await handleNowPlayingCommand(interaction, musicManager);
+        await handleNowPlayingCommand(interaction, distube);
         break;
       
       case 'remove':
-        await handleRemoveCommand(interaction, musicManager);
+        await handleRemoveCommand(interaction, distube);
         break;
       
       default:
@@ -206,7 +206,7 @@ export async function handleMusicCommand(
  */
 async function handlePlayCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager,
+  distube: DisTube,
   member: GuildMember
 ): Promise<void> {
   // Check if user is in a voice channel
@@ -220,7 +220,7 @@ async function handlePlayCommand(
 
   // Check bot permissions
   const permissions = member.voice.channel.permissionsFor(interaction.guild!.members.me!);
-  if (!permissions.has([PermissionFlagsBits.Connect, PermissionFlagsBits.Speak])) {
+  if (!permissions?.has([PermissionFlagsBits.Connect, PermissionFlagsBits.Speak])) {
     await interaction.reply({
       content: '❌ I need permission to connect and speak in your voice channel!',
       flags: MessageFlags.Ephemeral
@@ -233,15 +233,17 @@ async function handlePlayCommand(
   await interaction.deferReply();
 
   try {
-    await musicManager.play(
-      interaction.guild!,
-      interaction.channel as any,
-      member.voice.channel as any,
-      query,
-      member
-    );
-  } catch (error) {
-    await interaction.editReply('❌ An error occurred while trying to play the track.');
+    await distube.play(member.voice.channel, query, {
+      textChannel: interaction.channel as any,
+      member: member
+    });
+    
+    // Send success message instead of deleting
+    await interaction.editReply('✅ Added to queue! Check the channel for details.');
+  } catch (error: any) {
+    console.error('Play command error:', error);
+    const errorMessage = error?.message || 'An unknown error occurred';
+    await interaction.editReply(`❌ Error: ${errorMessage}`);
   }
 }
 
@@ -250,9 +252,9 @@ async function handlePlayCommand(
  */
 async function handleSkipCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music is currently playing!',
@@ -261,9 +263,10 @@ async function handleSkipCommand(
     return;
   }
 
-  if (musicManager.skip(interaction.guild!.id)) {
+  try {
+    await queue.skip();
     await interaction.reply('⏭️ Skipped the current track!');
-  } else {
+  } catch (error) {
     await interaction.reply({
       content: '❌ Nothing to skip!',
       flags: MessageFlags.Ephemeral
@@ -276,9 +279,9 @@ async function handleSkipCommand(
  */
 async function handleStopCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music is currently playing!',
@@ -287,14 +290,8 @@ async function handleStopCommand(
     return;
   }
 
-  if (musicManager.stop(interaction.guild!.id)) {
-    await interaction.reply('⏹️ Stopped playing music and cleared the queue!');
-  } else {
-    await interaction.reply({
-      content: '❌ Nothing to stop!',
-      flags: MessageFlags.Ephemeral
-    });
-  }
+  await queue.stop();
+  await interaction.reply('⏹️ Stopped playing music and cleared the queue!');
 }
 
 /**
@@ -302,9 +299,9 @@ async function handleStopCommand(
  */
 async function handlePauseCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music is currently playing!',
@@ -313,14 +310,16 @@ async function handlePauseCommand(
     return;
   }
 
-  if (musicManager.pause(interaction.guild!.id)) {
-    await interaction.reply('⏸️ Paused the current track!');
-  } else {
+  if (queue.paused) {
     await interaction.reply({
-      content: '❌ Nothing to pause!',
+      content: '❌ Music is already paused!',
       flags: MessageFlags.Ephemeral
     });
+    return;
   }
+
+  queue.pause();
+  await interaction.reply('⏸️ Paused the current track!');
 }
 
 /**
@@ -328,9 +327,9 @@ async function handlePauseCommand(
  */
 async function handleResumeCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music is currently playing!',
@@ -339,14 +338,16 @@ async function handleResumeCommand(
     return;
   }
 
-  if (musicManager.resume(interaction.guild!.id)) {
-    await interaction.reply('▶️ Resumed the current track!');
-  } else {
+  if (!queue.paused) {
     await interaction.reply({
-      content: '❌ Nothing to resume!',
+      content: '❌ Music is not paused!',
       flags: MessageFlags.Ephemeral
     });
+    return;
   }
+
+  queue.resume();
+  await interaction.reply('▶️ Resumed the current track!');
 }
 
 /**
@@ -354,10 +355,10 @@ async function handleResumeCommand(
  */
 async function handleQueueCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queueInfo = musicManager.getQueueInfo(interaction.guild!.id);
-  if (!queueInfo) {
+  const queue = distube.getQueue(interaction.guild!);
+  if (!queue) {
     await interaction.reply({
       content: '❌ No music queue found!',
       flags: MessageFlags.Ephemeral
@@ -370,30 +371,31 @@ async function handleQueueCommand(
     .setColor(0x00FF00)
     .setTimestamp();
 
-  if (queueInfo.currentTrack) {
+  const currentSong = queue.songs[0];
+  if (currentSong) {
     embed.addFields({
       name: '🎵 Now Playing',
-      value: `**${queueInfo.currentTrack.title}**\nRequested by: ${queueInfo.currentTrack.requestedBy}`,
+      value: `**${currentSong.name}**\nRequested by: ${currentSong.user}`,
       inline: false
     });
   }
 
-  if (queueInfo.tracks.length > 0) {
-    const queueList = queueInfo.tracks
-      .slice(0, 10)
-      .map((track: any, index: number) => 
-        `${index + 1}. **${track.title}** - ${track.getFormattedDuration()}\n   Requested by: ${track.requestedBy}`
+  if (queue.songs.length > 1) {
+    const queueList = queue.songs
+      .slice(1, 11)
+      .map((song, index) => 
+        `${index + 1}. **${song.name}** - ${song.formattedDuration}\n   Requested by: ${song.user}`
       )
       .join('\n\n');
 
     embed.addFields({
-      name: `📝 Up Next (${queueInfo.tracks.length} track${queueInfo.tracks.length !== 1 ? 's' : ''})`,
-      value: queueList || 'Queue is empty',
+      name: `📝 Up Next (${queue.songs.length - 1} track${queue.songs.length - 1 !== 1 ? 's' : ''})`,
+      value: queueList,
       inline: false
     });
 
-    if (queueInfo.tracks.length > 10) {
-      embed.setFooter({ text: `And ${queueInfo.tracks.length - 10} more tracks...` });
+    if (queue.songs.length > 11) {
+      embed.setFooter({ text: `And ${queue.songs.length - 11} more tracks...` });
     }
   } else {
     embed.addFields({
@@ -406,12 +408,12 @@ async function handleQueueCommand(
   embed.addFields(
     {
       name: '🔊 Volume',
-      value: `${queueInfo.volume}%`,
+      value: `${queue.volume}%`,
       inline: true
     },
     {
       name: '▶️ Status',
-      value: queueInfo.isPlaying ? 'Playing' : queueInfo.isPaused ? 'Paused' : 'Idle',
+      value: queue.paused ? 'Paused' : 'Playing',
       inline: true
     }
   );
@@ -424,9 +426,9 @@ async function handleQueueCommand(
  */
 async function handleVolumeCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music is currently playing!',
@@ -436,15 +438,8 @@ async function handleVolumeCommand(
   }
 
   const volume = interaction.options.getInteger('level', true);
-  
-  if (musicManager.setVolume(interaction.guild!.id, volume)) {
-    await interaction.reply(`🔊 Volume set to ${volume}%!`);
-  } else {
-    await interaction.reply({
-      content: '❌ Failed to set volume!',
-      flags: MessageFlags.Ephemeral
-    });
-  }
+  queue.setVolume(volume);
+  await interaction.reply(`🔊 Volume set to ${volume}%!`);
 }
 
 /**
@@ -452,9 +447,9 @@ async function handleVolumeCommand(
  */
 async function handleShuffleCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music queue found!',
@@ -463,14 +458,16 @@ async function handleShuffleCommand(
     return;
   }
 
-  if (musicManager.shuffle(interaction.guild!.id)) {
-    await interaction.reply('🔀 Queue has been shuffled!');
-  } else {
+  if (queue.songs.length <= 1) {
     await interaction.reply({
       content: '❌ Not enough tracks in queue to shuffle!',
       flags: MessageFlags.Ephemeral
     });
+    return;
   }
+
+  await queue.shuffle();
+  await interaction.reply('🔀 Queue has been shuffled!');
 }
 
 /**
@@ -478,9 +475,9 @@ async function handleShuffleCommand(
  */
 async function handleLeaveCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ I\'m not currently in a voice channel!',
@@ -489,7 +486,7 @@ async function handleLeaveCommand(
     return;
   }
 
-  musicManager.destroyQueue(interaction.guild!.id);
+  await distube.voices.leave(interaction.guild!);
   await interaction.reply('👋 Left the voice channel and cleared the queue!');
 }
 
@@ -498,10 +495,10 @@ async function handleLeaveCommand(
  */
 async function handleNowPlayingCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queueInfo = musicManager.getQueueInfo(interaction.guild!.id);
-  if (!queueInfo || !queueInfo.currentTrack) {
+  const queue = distube.getQueue(interaction.guild!);
+  if (!queue || !queue.songs[0]) {
     await interaction.reply({
       content: '❌ No music is currently playing!',
       flags: MessageFlags.Ephemeral
@@ -509,42 +506,42 @@ async function handleNowPlayingCommand(
     return;
   }
 
-  const track = queueInfo.currentTrack;
+  const song = queue.songs[0];
   const embed = new EmbedBuilder()
     .setTitle('🎵 Now Playing')
-    .setDescription(`**${track.title}**`)
+    .setDescription(`**${song.name}**`)
     .addFields(
       {
         name: 'Duration',
-        value: track.getFormattedDuration(),
+        value: song.formattedDuration,
         inline: true
       },
       {
         name: 'Requested By',
-        value: track.requestedBy.toString(),
+        value: song.user?.toString() || 'Unknown',
         inline: true
       },
       {
         name: 'Volume',
-        value: `${queueInfo.volume}%`,
+        value: `${queue.volume}%`,
         inline: true
       },
       {
         name: 'Status',
-        value: queueInfo.isPlaying ? '▶️ Playing' : queueInfo.isPaused ? '⏸️ Paused' : '⏹️ Stopped',
+        value: queue.paused ? '⏸️ Paused' : '▶️ Playing',
         inline: true
       },
       {
         name: 'Queue',
-        value: `${queueInfo.tracks.length} track${queueInfo.tracks.length !== 1 ? 's' : ''} remaining`,
+        value: `${queue.songs.length - 1} track${queue.songs.length - 1 !== 1 ? 's' : ''} remaining`,
         inline: true
       }
     )
     .setColor(0x00FF00)
     .setTimestamp();
 
-  if (track.thumbnail) {
-    embed.setThumbnail(track.thumbnail);
+  if (song.thumbnail) {
+    embed.setThumbnail(song.thumbnail);
   }
 
   await interaction.reply({ embeds: [embed] });
@@ -555,9 +552,9 @@ async function handleNowPlayingCommand(
  */
 async function handleRemoveCommand(
   interaction: ChatInputCommandInteraction,
-  musicManager: MusicManager
+  distube: DisTube
 ): Promise<void> {
-  const queue = musicManager.getQueue(interaction.guild!.id);
+  const queue = distube.getQueue(interaction.guild!);
   if (!queue) {
     await interaction.reply({
       content: '❌ No music queue found!',
@@ -567,9 +564,8 @@ async function handleRemoveCommand(
   }
 
   const position = interaction.options.getInteger('position', true);
-  const index = position - 1;
 
-  if (index < 0 || index >= queue.tracks.length) {
+  if (position < 1 || position >= queue.songs.length) {
     await interaction.reply({
       content: '❌ Invalid queue position!',
       flags: MessageFlags.Ephemeral
@@ -577,13 +573,8 @@ async function handleRemoveCommand(
     return;
   }
 
-  const removedTrack = queue.removeTrack(index);
-  if (removedTrack) {
-    await interaction.reply(`🗑️ Removed **${removedTrack.title}** from the queue!`);
-  } else {
-    await interaction.reply({
-      content: '❌ Failed to remove track from queue!',
-      flags: MessageFlags.Ephemeral
-    });
-  }
+  const removedSong = queue.songs[position];
+  queue.songs.splice(position, 1);
+  
+  await interaction.reply(`🗑️ Removed **${removedSong.name}** from the queue!`);
 }

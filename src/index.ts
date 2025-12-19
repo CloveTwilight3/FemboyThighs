@@ -13,7 +13,8 @@ import {
 } from 'discord.js';
 
 import * as dotenv from 'dotenv';
-import { MusicManager } from './services/MusicManager';
+import { DisTube } from 'distube';
+import { YtDlpPlugin } from '@distube/yt-dlp';
 import { registerMusicCommands, handleMusicCommand } from './commands/music';
 
 // Load environment variables
@@ -39,8 +40,14 @@ const client = new Client({
   ]
 });
 
-// Initialize music manager
-const musicManager = new MusicManager(client);
+// Initialize DisTube with yt-dlp plugin (much more reliable than ytdl-core)
+const distube = new DisTube(client, {
+  plugins: [
+    new YtDlpPlugin({
+      update: false // Don't auto-update yt-dlp (we'll use system version)
+    })
+  ]
+});
 
 /**
  * Register slash commands
@@ -50,7 +57,7 @@ async function registerCommands(): Promise<void> {
     console.log('🔄 Registering slash commands...');
 
     const commands: any[] = [];
-    registerMusicCommands(commands, musicManager);
+    registerMusicCommands(commands);
 
     const rest = new REST().setToken(process.env.DISCORD_TOKEN!);
 
@@ -107,7 +114,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   try {
-    await handleMusicCommand(interaction, musicManager);
+    await handleMusicCommand(interaction, distube);
   } catch (error) {
     console.error('Error handling interaction:', error);
   }
@@ -134,14 +141,12 @@ process.on('uncaughtException', (error) => {
  */
 process.on('SIGINT', () => {
   console.log('\n🛑 Shutting down gracefully...');
-  musicManager.cleanup();
   client.destroy();
   process.exit(0);
 });
 
 process.on('SIGTERM', () => {
   console.log('\n🛑 Shutting down gracefully...');
-  musicManager.cleanup();
   client.destroy();
   process.exit(0);
 });
