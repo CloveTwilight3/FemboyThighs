@@ -1,0 +1,38 @@
+{
+  "name": "femboythighs-music-bot",
+  "version": "1.0.0",
+  "description": "FemboyThighs - A Discord music bot",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts"
+  },
+  "keywords": [
+    "discord",
+    "bot",
+    "music",
+    "typescript"
+  ],
+  "author": "CloveTwilight3",
+  "license": "MIT",
+  "dependencies": {
+    "discord.js": "^14.14.1",
+    "dotenv": "^16.3.1",
+    "@discordjs/voice": "^0.17.0",
+    "@discordjs/opus": "^0.9.0",
+    "play-dl": "^1.9.7",
+    "ffmpeg-static": "^5.2.0",
+    "prism-media": "^1.3.5",
+    "opusscript": "^0.0.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.4",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.3.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  }
+}

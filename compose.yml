@@ -1,0 +1,11 @@
+services:
+  femboythighs:
+    build: .
+    container_name: femboythighs-music-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=production
